@@ -5,7 +5,7 @@ This script runs a backtest simulation:
 1. Load historical data
 2. Load trained model
 3. Generate signals
-4. Simulate paper trading
+4. Simulate paper trading with PROPER evaluation
 5. Report results
 """
 
@@ -13,13 +13,13 @@ import os
 import sys
 from datetime import datetime
 import joblib
+import pandas as pd
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 from data_loader.yfinance_loader import YFinanceLoader
 from features.feature_generator import FeatureGenerator
-from features.labeler import BinaryOptionsLabeler
 from strategy.signal_generator import SignalGenerator
 from execution.paper_trader import PaperTrader
 
@@ -32,7 +32,7 @@ def main():
     # CONFIGURATION
     # ============================================================================
     SYMBOL = "EURUSD=X"
-    START_DATE = "2024-11-01"  # Use recent data for backtest
+    START_DATE = "2024-01-01"  # Use more data for robust backtest
     END_DATE = "2024-12-01"
     INTERVAL = "1h"
     EXPIRATION_PERIODS = 5
@@ -78,20 +78,25 @@ def main():
     df_features = feature_gen.generate_all_features()
     
     # ============================================================================
-    # STEP 3: CREATE LABELS (for evaluation)
+    # STEP 3: EXTRACT FEATURES (NO LABELS NEEDED FOR BACKTEST)
     # ============================================================================
-    print("STEP 3: Creating labels for evaluation...")
-    labeler = BinaryOptionsLabeler(df_features, expiration_periods=EXPIRATION_PERIODS)
-    df_labeled = labeler.create_labels()
+    print("STEP 3: Preparing features for prediction...")
     
-    X, y = labeler.get_features_and_target()
+    # Extract features only (no labels)
+    exclude_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+    X = df_features.drop(columns=exclude_cols, errors='ignore')
     
-    print(f"Backtest dataset: {X.shape}\n")
+    # Keep the original close prices for evaluation
+    close_prices = df_features['Close'].copy()
+    
+    print(f"Features: {X.shape}")
+    print(f"Close prices: {len(close_prices)}\\n")
     
     # ============================================================================
-    # STEP 4: GENERATE SIGNALS & SIMULATE TRADING
+    # STEP 4: WALK-FORWARD BACKTEST (PROPER EVALUATION)
     # ============================================================================
-    print("STEP 4: Generating signals and simulating trades...")
+    print("STEP 4: Running walk-forward backtest...")
+    print("Note: Only trading when we have future data to evaluate\\n")
     
     signal_gen = SignalGenerator(model=model, probability_threshold=PROBABILITY_THRESHOLD)
     paper_trader = PaperTrader(
@@ -100,26 +105,43 @@ def main():
         trade_amount=TRADE_AMOUNT
     )
     
-    # Generate signals for all data points
-    signals = signal_gen.generate_signal(X)
+    # We can only trade up to (len - EXPIRATION_PERIODS) because we need future data to evaluate
+    max_trade_idx = len(X) - EXPIRATION_PERIODS
     
-    # Convert to list if single signal
-    if isinstance(signals, dict):
-        signals = [signals]
-    
-    # Execute trades
     trades_executed = 0
-    for i, signal in enumerate(signals):
-        if signal['action'] != 'NO_TRADE':
-            paper_trader.execute_trade(
-                signal=signal,
-                actual_outcome=y.iloc[i],
-                timestamp=df_labeled.index[i]
-            )
-            trades_executed += 1
+    for i in range(max_trade_idx):
+        # Get features for current time step
+        current_features = X.iloc[i:i+1]
+        
+        # Generate signal
+        signal = signal_gen.generate_signal(current_features)
+        
+        if signal['action'] == 'NO_TRADE':
+            continue
+        
+        # Get current and future price
+        current_price = close_prices.iloc[i]
+        future_price = close_prices.iloc[i + EXPIRATION_PERIODS]
+        
+        # Determine actual outcome based on ACTUAL price movement
+        # NOT based on pre-computed labels!
+        if signal['action'] == 'CALL':
+            actual_outcome = 1 if future_price > current_price else 0
+        elif signal['action'] == 'PUT':
+            actual_outcome = 1 if future_price < current_price else 0
+        else:
+            continue
+        
+        # Execute trade with actual outcome
+        paper_trader.execute_trade(
+            signal=signal,
+            actual_outcome=actual_outcome,
+            timestamp=df_features.index[i]
+        )
+        trades_executed += 1
     
-    print(f"Signals generated: {len(signals)}")
-    print(f"Trades executed: {trades_executed}\n")
+    print(f"Total possible trades: {max_trade_idx:,}")
+    print(f"Trades executed: {trades_executed:,}\\n")
     
     # ============================================================================
     # STEP 5: RESULTS
@@ -137,7 +159,6 @@ def main():
     stats = paper_trader.get_statistics()
     
     # Break-even win rate calculation
-    # For 85% payout: need to win (1/(1+0.85)) = 54.05% to break even
     breakeven_rate = 1 / (1 + PAYOUT_RATIO)
     
     print(f"Break-even win rate: {breakeven_rate:.2%}")

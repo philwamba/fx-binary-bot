@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FX Binary Options Bot - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+      body {
+        font-family: "Inter", sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+
+      .glass {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+      }
+
+      .metric-card {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.5);
+      }
+
+      .pulse-dot {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .chart-container {
+        min-height: 400px;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen p-8">
+    <div class="max-w-7xl mx-auto">
+      <!-- Header -->
+      <div class="glass rounded-2xl p-8 mb-8">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-4xl font-bold text-white mb-2">
+              FX Binary Options Bot
+            </h1>
+            <p class="text-white/70">
+              Real-time Trading Intelligence Dashboard
+            </p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <div class="pulse-dot w-3 h-3 bg-green-400 rounded-full"></div>
+            <span class="text-white font-medium" id="status">Loading...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Prediction Card -->
+      <div class="glass rounded-2xl p-8 mb-8">
+        <h2 class="text-2xl font-bold text-white mb-6">
+          Live Market Prediction
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="bg-white/10 rounded-xl p-6 text-center">
+            <p class="text-white/70 text-sm mb-2">Current Signal</p>
+            <p class="text-3xl font-bold text-white" id="signal">-</p>
+          </div>
+          <div class="bg-white/10 rounded-xl p-6 text-center">
+            <p class="text-white/70 text-sm mb-2">Confidence</p>
+            <p class="text-3xl font-bold text-white" id="confidence">-</p>
+          </div>
+          <div class="bg-white/10 rounded-xl p-6 text-center">
+            <p class="text-white/70 text-sm mb-2">Current Price</p>
+            <p class="text-3xl font-bold text-white" id="price">-</p>
+          </div>
+        </div>
+        <button
+          onclick="getPrediction()"
+          class="mt-6 w-full bg-white/20 hover:bg-white/30 text-white font-semibold py-3 px-6 rounded-xl transition-all"
+        >
+          Refresh Prediction
+        </button>
+      </div>
+
+      <!-- Performance Metrics -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="glass rounded-xl p-6 metric-card">
+          <p class="text-white/70 text-sm mb-2">Win Rate</p>
+          <p class="text-3xl font-bold text-white" id="winRate">-</p>
+          <p class="text-xs text-white/50 mt-1">Break-even: 54.05%</p>
+        </div>
+        <div class="glass rounded-xl p-6 metric-card">
+          <p class="text-white/70 text-sm mb-2">Total Trades</p>
+          <p class="text-3xl font-bold text-white" id="totalTrades">-</p>
+        </div>
+        <div class="glass rounded-xl p-6 metric-card">
+          <p class="text-white/70 text-sm mb-2">Net Return</p>
+          <p class="text-3xl font-bold text-white" id="netReturn">-</p>
+        </div>
+        <div class="glass rounded-xl p-6 metric-card">
+          <p class="text-white/70 text-sm mb-2">Final Balance</p>
+          <p class="text-3xl font-bold text-white" id="finalBalance">-</p>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div class="glass rounded-2xl p-6">
+          <h3 class="text-xl font-bold text-white mb-4">Equity Curve</h3>
+          <div id="equityChart" class="chart-container"></div>
+        </div>
+        <div class="glass rounded-2xl p-6">
+          <h3 class="text-xl font-bold text-white mb-4">Win Rate by Hour</h3>
+          <div id="hourlyChart" class="chart-container"></div>
+        </div>
+      </div>
+
+      <!-- Trade Distribution -->
+      <div class="glass rounded-2xl p-6 mb-8">
+        <h3 class="text-xl font-bold text-white mb-4">Action Distribution</h3>
+        <div id="actionChart" class="chart-container"></div>
+      </div>
+
+      <!-- Recent Trades -->
+      <div class="glass rounded-2xl p-8">
+        <h3 class="text-2xl font-bold text-white mb-6">Recent Trades</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-white">
+            <thead>
+              <tr class="border-b border-white/20">
+                <th class="text-left py-3 px-4">Time</th>
+                <th class="text-left py-3 px-4">Action</th>
+                <th class="text-left py-3 px-4">Confidence</th>
+                <th class="text-left py-3 px-4">Outcome</th>
+                <th class="text-left py-3 px-4">Profit</th>
+                <th class="text-left py-3 px-4">Balance</th>
+              </tr>
+            </thead>
+            <tbody id="tradesTable">
+              <tr>
+                <td colspan="6" class="text-center py-4 text-white/50">
+                  Loading...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const API_BASE = "http://localhost:8000";
+
+      // Fetch data on load
+      document.addEventListener("DOMContentLoaded", () => {
+        loadDashboard();
+        setInterval(loadDashboard, 60000); // Refresh every minute
+      });
+
+      async function loadDashboard() {
+        await Promise.all([
+          checkStatus(),
+          getBacktestResults(),
+          getPerformance(),
+          getTrades(),
+        ]);
+      }
+
+      async function checkStatus() {
+        try {
+          const res = await fetch(`${API_BASE}/api/status`);
+          const data = await res.json();
+          document.getElementById("status").textContent = data.model_loaded
+            ? "Online"
+            : "Offline";
+        } catch (error) {
+          document.getElementById("status").textContent = "API Offline";
+        }
+      }
+
+      async function getPrediction() {
+        try {
+          const res = await fetch(`${API_BASE}/api/predict`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ symbol: "EURUSD=X" }),
+          });
+          const data = await res.json();
+
+          document.getElementById("signal").textContent = data.signal;
+          document.getElementById("signal").className = `text-3xl font-bold ${
+            data.signal === "CALL"
+              ? "text-green-400"
+              : data.signal === "PUT"
+              ? "text-red-400"
+              : "text-yellow-400"
+          }`;
+          document.getElementById("confidence").textContent = `${(
+            data.probability * 100
+          ).toFixed(2)}%`;
+          document.getElementById("price").textContent =
+            data.current_price.toFixed(5);
+        } catch (error) {
+          console.error("Prediction error:", error);
+        }
+      }
+
+      async function getBacktestResults() {
+        try {
+          const res = await fetch(`${API_BASE}/api/backtest/results`);
+          const data = await res.json();
+
+          const winRateColor =
+            data.win_rate > data.break_even_rate
+              ? "text-green-400"
+              : "text-red-400";
+          const returnColor =
+            data.net_return > 0 ? "text-green-400" : "text-red-400";
+
+          document.getElementById(
+            "winRate"
+          ).innerHTML = `<span class="${winRateColor}">${(
+            data.win_rate * 100
+          ).toFixed(2)}%</span>`;
+          document.getElementById("totalTrades").textContent =
+            data.total_trades.toLocaleString();
+          document.getElementById(
+            "netReturn"
+          ).innerHTML = `<span class="${returnColor}">${(
+            data.net_return * 100
+          ).toFixed(2)}%</span>`;
+          document.getElementById(
+            "finalBalance"
+          ).textContent = `$${data.final_balance.toLocaleString()}`;
+        } catch (error) {
+          console.error("Backtest error:", error);
+        }
+      }
+
+      async function getPerformance() {
+        try {
+          const res = await fetch(`${API_BASE}/api/performance`);
+          const data = await res.json();
+
+          // Equity Curve
+          const equityData = [
+            {
+              x: data.equity_curve.map((d) => d.timestamp),
+              y: data.equity_curve.map((d) => d.balance),
+              type: "scatter",
+              mode: "lines",
+              fill: "tozeroy",
+              line: { color: "rgba(99, 102, 241, 0.8)", width: 3 },
+              fillcolor: "rgba(99, 102, 241, 0.2)",
+            },
+          ];
+
+          Plotly.newPlot(
+            "equityChart",
+            equityData,
+            {
+              paper_bgcolor: "rgba(0,0,0,0)",
+              plot_bgcolor: "rgba(0,0,0,0)",
+              font: { color: "white" },
+              xaxis: { gridcolor: "rgba(255,255,255,0.1)" },
+              yaxis: { gridcolor: "rgba(255,255,255,0.1)" },
+              margin: { t: 20, r: 20, b: 40, l: 50 },
+            },
+            { responsive: true }
+          );
+
+          // Hourly Win Rate
+          const hourlyData = [
+            {
+              x: data.hourly_win_rate.map((d) => d.hour),
+              y: data.hourly_win_rate.map((d) => d.win_rate * 100),
+              type: "bar",
+              marker: {
+                color: data.hourly_win_rate.map((d) =>
+                  d.win_rate > 0.54
+                    ? "rgba(34, 197, 94, 0.8)"
+                    : "rgba(239, 68, 68, 0.8)"
+                ),
+              },
+            },
+          ];
+
+          Plotly.newPlot(
+            "hourlyChart",
+            hourlyData,
+            {
+              paper_bgcolor: "rgba(0,0,0,0)",
+              plot_bgcolor: "rgba(0,0,0,0)",
+              font: { color: "white" },
+              xaxis: {
+                title: "Hour of Day",
+                gridcolor: "rgba(255,255,255,0.1)",
+              },
+              yaxis: {
+                title: "Win Rate (%)",
+                gridcolor: "rgba(255,255,255,0.1)",
+              },
+              margin: { t: 20, r: 20, b: 50, l: 50 },
+            },
+            { responsive: true }
+          );
+
+          // Action Distribution
+          const actionData = [
+            {
+              values: Object.values(data.action_distribution),
+              labels: Object.keys(data.action_distribution),
+              type: "pie",
+              marker: {
+                colors: [
+                  "rgba(34, 197, 94, 0.8)",
+                  "rgba(239, 68, 68, 0.8)",
+                  "rgba(251, 191, 36, 0.8)",
+                ],
+              },
+            },
+          ];
+
+          Plotly.newPlot(
+            "actionChart",
+            actionData,
+            {
+              paper_bgcolor: "rgba(0,0,0,0)",
+              font: { color: "white" },
+              margin: { t: 20, r: 20, b: 20, l: 20 },
+            },
+            { responsive: true }
+          );
+        } catch (error) {
+          console.error("Performance error:", error);
+        }
+      }
+
+      async function getTrades(limit = 20) {
+        try {
+          const res = await fetch(`${API_BASE}/api/trades?limit=${limit}`);
+          const trades = await res.json();
+
+          const tbody = document.getElementById("tradesTable");
+          tbody.innerHTML = trades
+            .map(
+              (trade) => `
+                    <tr class="border-b border-white/10 hover:bg-white/5 transition">
+                        <td class="py-3 px-4">${new Date(
+                          trade.timestamp
+                        ).toLocaleString()}</td>
+                        <td class="py-3 px-4">
+                            <span class="px-2 py-1 rounded text-xs font-semibold ${
+                              trade.action === "CALL"
+                                ? "bg-green-500/20 text-green-400"
+                                : "bg-red-500/20 text-red-400"
+                            }">${trade.action}</span>
+                        </td>
+                        <td class="py-3 px-4">${(
+                          trade.probability * 100
+                        ).toFixed(2)}%</td>
+                        <td class="py-3 px-4">
+                            <span class="px-2 py-1 rounded text-xs font-semibold ${
+                              trade.outcome === "WIN"
+                                ? "bg-green-500/20 text-green-400"
+                                : "bg-red-500/20 text-red-400"
+                            }">${trade.outcome}</span>
+                        </td>
+                        <td class="py-3 px-4 ${
+                          trade.profit > 0 ? "text-green-400" : "text-red-400"
+                        }">
+                            ${
+                              trade.profit > 0 ? "+" : ""
+                            }$${trade.profit.toFixed(2)}
+                        </td>
+                        <td class="py-3 px-4">$${trade.balance.toLocaleString()}</td>
+                    </tr>
+                `
+            )
+            .join("");
+        } catch (error) {
+          console.error("Trades error:", error);
+        }
+      }
+    </script>
+  </body>
+</html>
