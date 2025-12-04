@@ -26,14 +26,24 @@ class BinaryOptionsLabeler:
             Target = 1 if Close(t + expiration_periods) > Close(t)
             Target = 0 otherwise
         """
+        # Ensure Close is a Series (handle if yfinance returns DataFrame format)
+        if isinstance(self.df['Close'], pd.DataFrame):
+            close_series = self.df['Close'].iloc[:, 0]
+        else:
+            close_series = self.df['Close']
+        
         # Shift close prices backwards to get future price
-        self.df['future_close'] = self.df['Close'].shift(-self.expiration_periods)
+        future_close = close_series.shift(-self.expiration_periods)
         
         # Create binary target
-        self.df['target'] = (self.df['future_close'].squeeze() > self.df['Close'].squeeze()).astype(int)
+        target = (future_close > close_series).astype(int)
+        
+        # Assign to dataframe
+        self.df['future_close'] = future_close
+        self.df['target'] = target
         
         # Drop rows where we don't have future data
-        self.df.dropna(subset=['future_close'], inplace=True)
+        self.df = self.df.dropna(subset=['future_close'])
         
         # Calculate class distribution
         target_dist = self.df['target'].value_counts(normalize=True)
