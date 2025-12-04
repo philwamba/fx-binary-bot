@@ -30,7 +30,7 @@ class BinaryOptionsLabeler:
         self.df['future_close'] = self.df['Close'].shift(-self.expiration_periods)
         
         # Create binary target
-        self.df['target'] = (self.df['future_close'] > self.df['Close']).astype(int)
+        self.df['target'] = (self.df['future_close'].squeeze() > self.df['Close'].squeeze()).astype(int)
         
         # Drop rows where we don't have future data
         self.df.dropna(subset=['future_close'], inplace=True)

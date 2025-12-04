@@ -37,7 +37,7 @@ fx-binary-bot/
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone git@github.com:philwamba/fx-binary-bot.git
 cd fx-binary-bot
 ```
 

@@ -24,9 +24,9 @@ class FeatureGenerator:
         """
         Add standard technical indicators using the 'ta' library.
         """
-        close = self.df['Close']
-        high = self.df['High']
-        low = self.df['Low']
+        close = self.df['Close'].squeeze()
+        high = self.df['High'].squeeze()
+        low = self.df['Low'].squeeze()
         
         # RSI
         rsi = RSIIndicator(close=close, window=14)
