@@ -24,6 +24,11 @@ class YFinanceLoader(AbstractDataProvider):
         # Ensure standard columns and index
         # yfinance returns: Open, High, Low, Close, Adj Close, Volume
         # We drop Adj Close for FX usually, or keep it. Let's stick to OHLCV.
+        
+        # Flatten multi-index columns if present
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        
         df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
         
         # Ensure index is datetime and sorted
